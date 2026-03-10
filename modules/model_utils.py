@@ -283,3 +283,16 @@ def train_models(
 
     except Exception as e:
         return {"error": str(e)}
+def predict_with_model(wrapper: dict, df: pd.DataFrame) -> np.ndarray:
+    model = wrapper["model"]
+    f_maps = wrapper["feature_maps"]
+    cols = wrapper["feature_cols"]
+    
+    X = df[cols].copy()
+    for col, fmap in f_maps.items():
+        if fmap:
+            X[col] = X[col].astype(str).map(fmap).fillna(-1).astype(int)
+        elif not pd.api.types.is_numeric_dtype(X[col]):
+            X[col] = pd.factorize(X[col].astype(str))[0]
+            
+    return model.predict(X)
