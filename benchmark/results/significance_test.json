@@ -1,0 +1,8 @@
+{
+  "statistic": 0.0,
+  "p_value_two_tailed": 0.25,
+  "p_value_one_tailed": 0.125,
+  "significant_at_0.05": 0,
+  "cohens_d": 3.3971283310465874,
+  "effect_size": "large"
+}

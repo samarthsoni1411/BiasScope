@@ -16,8 +16,11 @@ st.write(f"Dataset loaded: {path.split('/')[-1]} — shape: {df.shape}")
 st.dataframe(df.head(5))
 
 if st.button("🚀 Run Preprocessing"):
-    cleaned_path, df_clean, encoded_cols = preprocess_data(df, target_col)
+    cleaned_path, df_clean, encoded_cols, scaler_path = preprocess_data(df, target_col)
     st.success(f"✅ Preprocessing complete. Saved to: {cleaned_path}")
     st.write("**Encoded columns:**", encoded_cols if encoded_cols else "None")
+    if scaler_path:
+        st.info(f"🔢 StandardScaler saved to: `{scaler_path.split('/')[-1]}`")
     st.dataframe(df_clean.head(5))
     st.session_state["cleaned_path"] = cleaned_path
+    st.session_state["scaler_path"] = scaler_path

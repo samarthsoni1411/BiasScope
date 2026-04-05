@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\caption{BiasScope Evaluation: IFS, Accuracy, and Fairness Metrics Before/After Mitigation}
+\label{tab:main_results}
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Acc.↑} & \textbf{Acc.↑} & \textbf{IFS↑} & \textbf{IFS↑} & \textbf{DP↓} & \textbf{DP↓} & \textbf{DI↑} & \textbf{DI↑} \\
+ & \textit{Before} & \textit{After} & \textit{Before} & \textit{After} & \textit{Before} & \textit{After} & \textit{Before} & \textit{After} \\
+\midrule
+Adult Income & 0.8687 & 0.8415 & 0.8582 [0.842,0.874] & 0.9775 [0.961,0.986] & 0.1654 & 0.0128 & 0.3627 & 0.9259 \\
+COMPAS & 0.6985 & 0.6402 & 0.8002 [0.763,0.837] & 0.8768 [0.837,0.917] & 0.8214 & 0.6964 & 0.3905 & 0.6842 \\
+German Credit & 0.7150 & 0.7100 & 0.8951 [0.802,0.958] & 0.9548 [0.851,0.978] & 0.2396 & 0.0729 & 0.4103 & 0.7407 \\
+\bottomrule
+\multicolumn{9}{p{0.95\linewidth}}{\footnotesize \textit{IFS = Intersectional Fairness Score (↑ = higher is fairer), DP Diff = Demographic Parity Difference (↓ = lower is fairer), DI = Disparate Impact Ratio (↑ = higher is fairer, $\geq 0.8$ = legal threshold). Bootstrap 95\% CIs shown in brackets for IFS.}}
+\end{tabular}%
+}
+\end{table}

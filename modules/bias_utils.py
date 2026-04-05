@@ -84,6 +84,9 @@ def calc_di(df: pd.DataFrame, sensitive_col: str, target_col: Optional[str], min
             
         if len(ratios) == 0:
             return None
-        return float(min(ratios, key=lambda x: abs(x - 1)))
+        # Return the minimum ratio: this represents the least-favored group vs the
+        # most-favored group, which is the standard Disparate Impact definition (the 80% rule).
+        # A value < 0.8 indicates a significant adverse impact.
+        return float(min(ratios))
     except Exception:
         return None

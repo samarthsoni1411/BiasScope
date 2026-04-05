@@ -16,6 +16,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
+from .serialization_utils import save_model_wrapper
 
 # Optional third-party models
 try:
@@ -264,12 +265,29 @@ def train_models(
             except Exception as e:
                 results.append({"Model": name, "Error": str(e)})
 
-        # save best model
+        # Save best model as a WRAPPER DICT (same format as mitigation_utils)
+        # This eliminates the isinstance(wrapper, dict) dual-path in downstream pages.
+        feature_maps: Dict[str, Any] = {}
+        for col in X.columns:
+            if pd.api.types.is_numeric_dtype(X[col]):
+                feature_maps[col] = None
+            else:
+                vals, uniques = pd.factorize(X[col].astype(str))
+                feature_maps[col] = {str(v): int(i) for i, v in enumerate(uniques)}
+
+        wrapper = {
+            "model": best_model_obj,
+            "feature_maps": feature_maps,
+            "feature_cols": list(X.columns),
+            "target_mapping": target_mapping,
+            "task": task
+        }
+
         model_path = os.path.join(
             MODEL_DIR,
             f"{uuid.uuid4().hex[:8]}_{best_model_name.replace(' ', '_')}.pkl"
         )
-        pickle.dump(best_model_obj, open(model_path, "wb"))
+        save_model_wrapper(wrapper, model_path)
 
         if progress_callback:
             progress_callback(100, f"Finished! Best Model → {best_model_name}")

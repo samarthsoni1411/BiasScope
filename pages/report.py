@@ -20,10 +20,12 @@ target_col = st.session_state.get("target_col", "Target")
 sensitive_feature = st.session_state.get("sensitive_col", "Sensitive Attribute")
 model_name = trained_model.get("best_model", "Best Model")
 
-# Pull metrics from the unified wrapper structure
-acc_before = trained_model.get("metrics", {}).get("accuracy", 0.0)
-if acc_before == 0.0:
-    acc_before = trained_model.get("metrics", {}).get("r2", 0.0)
+# Pull accuracy directly from the evaluation results
+acc_before = 0.0
+for res in trained_model.get("results", []):
+    if res.get("Model") == model_name:
+        acc_before = res.get("Accuracy", res.get("R2 Score", 0.0))
+        break
 
 # Mitigation accuracy comes from the session state calculated in mitigation.py
 acc_after = fairness_after.get("accuracy", 0.0)

@@ -1,2 +1,21 @@
-fairlearn
+# Core framework
+streamlit
+pandas
+numpy
+scikit-learn
+
+# Visualisation
 plotly
+matplotlib
+
+# ML model libraries
+xgboost
+lightgbm
+catboost
+
+# Fairness & explainability
+fairlearn
+shap
+
+# Report generation
+reportlab

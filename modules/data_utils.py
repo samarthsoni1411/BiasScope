@@ -1,5 +1,5 @@
 # modules/data_utils.py
-import os, uuid
+import os, uuid, pickle
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -41,7 +41,7 @@ def guess_target_column(df: pd.DataFrame) -> Optional[str]:
             continue
     return None
 
-def preprocess_data(df: pd.DataFrame, target_col: Optional[str] = None) -> Tuple[str, pd.DataFrame, list]:
+def preprocess_data(df: pd.DataFrame, target_col: Optional[str] = None) -> Tuple[str, pd.DataFrame, list, Optional[str]]:
     df_clean = df.copy()
 
     # Fill missing
@@ -65,12 +65,20 @@ def preprocess_data(df: pd.DataFrame, target_col: Optional[str] = None) -> Tuple
             df_clean[c] = le.fit_transform(df_clean[c].astype(str))
             encoded_cols.append(c)
 
-    # Scale numeric columns excluding target
+    # Scale numeric columns excluding target — save the scaler for later use in What-If
     numeric_cols = [c for c in df_clean.select_dtypes(include=[np.number]).columns if c != target_col]
+    scaler_path = None
     if len(numeric_cols) > 0:
         scaler = StandardScaler()
         df_clean[numeric_cols] = scaler.fit_transform(df_clean[numeric_cols])
+        # Persist scaler alongside cleaned CSV so explain_bias.py can reload it
+        uid = uuid.uuid4().hex[:8]
+        out_path = os.path.join(PROC_DIR, f"{uid}_cleaned.csv")
+        scaler_path = os.path.join(PROC_DIR, f"{uid}_scaler.pkl")
+        with open(scaler_path, "wb") as f:
+            pickle.dump({"scaler": scaler, "numeric_cols": numeric_cols}, f)
+    else:
+        out_path = os.path.join(PROC_DIR, f"{uuid.uuid4().hex[:8]}_cleaned.csv")
 
-    out_path = os.path.join(PROC_DIR, f"{uuid.uuid4().hex[:8]}_cleaned.csv")
     df_clean.to_csv(out_path, index=False)
-    return out_path, df_clean, encoded_cols
+    return out_path, df_clean, encoded_cols, scaler_path

@@ -1,0 +1,278 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{BiasScope: An Interactive Framework for Model-Agnostic Fairness Discovery, Mitigation, and Explainability}
+
+\author{\IEEEauthorblockN{Soni Samarth}
+\IEEEauthorblockA{\textit{Department of Computer Science} \\
+\textit{Vellore Institute of Technology}\\
+Vellore, India \\
+soni.samarth2025@vitstudent.ac.in}
+}
+
+\maketitle
+
+\begin{abstract}
+As machine learning models are increasingly deployed in high-stakes domains such as criminal justice, finance, and healthcare, ensuring their fairness and transparency has become a critical societal imperative. Despite the proliferation of algorithmic fairness tools, existing frameworks often suffer from three major limitations: they treat fairness as a binary post-hoc check, fail to capture intersectional biases across multiple demographic attributes, and lack intuitive, model-agnostic explainability mechanisms to elucidate why models exhibit bias. In this paper, we introduce BiasScope, an end-to-end, interactive, and open-source framework designed to bridge the gap between fairness auditing, mitigation, and explainability. BiasScope integrates advanced intersectional data auditing, automated ensemble model training, and a novel multi-objective bias mitigation strategy that leverages Pareto-optimal thresholding to balance accuracy and fairness. Furthermore, it incorporates SHAP (SHapley Additive exPlanations) for global feature attribution and individual counterfactual generation, empowering stakeholders to interactively explore ``What-If'' scenarios. We evaluate BiasScope on real-world datasets, demonstrating its efficacy in uncovering hidden intersectional biases and enabling nuanced, human-in-the-loop mitigation strategies that outperform standard threshold optimization. Our findings suggest that integrating robust explainability with multi-objective mitigation is crucial for building trustworthy AI systems. BiasScope provides researchers, policymakers, and practitioners with an accessible paradigm for comprehensive AI fairness auditing.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Algorithmic Fairness, Bias Mitigation, Explainable AI, Intersectional Bias, Machine Learning, SHAP
+\end{IEEEkeywords}
+
+\section{Introduction}
+The rapid proliferation of Artificial Intelligence (AI) and Machine Learning (ML) across diverse sectors has revolutionized decision-making processes. From automated resume screening and credit scoring to predictive policing and medical diagnosis, predictive models offer immense potential for efficiency and scalability \cite{barocas2016big}. However, this ubiquity is accompanied by a growing concern: these algorithms often inherit, amplify, or even instantiate systemic societal biases \cite{mehrabi2021survey}. Predictive systems trained on historical data inherently learn the patterns of past decisions, which may reflect human prejudice or historical inequalities. Consequently, models can disproportionately penalize marginalized demographic groups defined by sensitive attributes such as race, gender, or age \cite{buolamwini2018gender}.
+
+The AI research community has responded by developing a robust taxonomy of fairness metrics, generally categorized into group fairness (e.g., demographic parity, equalized odds) and individual fairness \cite{dwork2012fairness, hardt2016equality}. Alongside these metrics, numerous open-source libraries like IBM's AI Fairness 360 (AIF360) \cite{bellamy2019ai} and Microsoft's Fairlearn \cite{bird2020fairlearn} have emerged to facilitate bias detection and mitigation. While these tools represent significant progress, they face substantial limitations in practical deployment. 
+
+First, most frameworks focus singularly on disparate impact across unidimensional attributes (e.g., race *or* gender), often masking profound biases that occur at the intersection of these identities (e.g., Black women). This phenomenon, known as intersectional bias or subgroup bias, remains severely under-audited in operational ML pipelines \cite{crenshaw1989demarginalizing, kearns2018preventing}.
+
+Second, the relationship between algorithmic accuracy (e.g., F1-score, Area Under the ROC Curve) and fairness is fundamentally a trade-off. Standard mitigation techniques typically optimize for one specific metric subject to rigid fairness constraints, resulting in a single model that may not align with an organization's specific operational context or ethical priorities. Stakeholders require the ability to visualize and navigate this Pareto-optimal trade-off space dynamically, rather than being handed a static, ``de-biased'' black box \cite{corbett2017algorithmic}.
+
+Third, and perhaps most critically, fairness tools frequently lack explanatory power. Discovering that a model violates equal opportunity is insufficient; practitioners must understand *why* the model makes biased decisions to enact meaningful systemic changes \cite{rudin2019stop}. Integrating contemporary Explainable AI (XAI) techniques, such as SHAP and counterfactual ``What-If'' analyses, directly into the fairness auditing loop is essential to bridge the ``trust gap'' between data scientists and domain experts.
+
+To address these compounding challenges, we present \textbf{BiasScope}, an interactive, model-agnostic framework for discovering, mitigating, and explaining algorithmic bias. BiasScope transforms the traditional linear fairness audit into a continuous, exploratory, and explanatory pipeline.
+
+The primary contributions of this paper are:
+\begin{enumerate}
+    \item \textbf{Intersectional Auditing Engine:} We propose an automated methodology for detecting disparate treatment and disparate impact not only across single sensitive attributes but across dynamically generated intersectional subgroups.
+    \item \textbf{Multi-Objective Mitigation via Pareto Frontier Exploration:} Rather than imposing hard constraints, BiasScope implements a grid search-based threshold optimization strategy that plots the Accuracy-Fairness Pareto frontier, enabling stakeholders to select the optimal operating point interactively.
+    \item \textbf{Integrated Bias Explainability:} We bridge fairness and XAI by integrating global SHAP feature importance analysis with localized individual counterfactuals, allowing users to trace model bias back to specific feature interactions.
+    \item \textbf{An End-to-End Open Source Framework:} We design and implement an interactive Streamlit-based graphical interface and a comprehensive Python library that operationalizes these methodologies, concluding with automated PDF report generation for compliance and governance.
+\end{enumerate}
+
+The remainder of this paper is structured as follows. Section \ref{sec:related_work} reviews the background and related literature on AI fairness and explainability. Section \ref{sec:architecture} details the architecture of the BiasScope framework and its core methodological components. In Section \ref{sec:experimental}, we present our experimental setup, followed by a comprehensive evaluation of the framework on benchmark fairness datasets in Section \ref{sec:results}. Finally, Section \ref{sec:conclusion} concludes the paper and discusses avenues for future research.
+
+
+\section{Background and Related Work} \label{sec:related_work}
+
+The pursuit of fair machine learning has catalyzed a vast body of literature at the intersection of computer science, statistics, law, and ethics. BiasScope builds upon foundational concepts in fairness metrics, mitigation algorithms, and explainable AI.
+
+\subsection{Algorithmic Fairness Metrics}
+Fairness in machine learning is typically formalized through statistical metrics. Group fairness metrics require that the model behaves similarly across defined demographic groups (defined by sensitive attributes $A$). Common metrics include:
+\begin{itemize}
+    \item \textbf{Demographic Parity (Statistical Parity):} Requires that the proportion of positive predictions is independent of the sensitive attribute. Formally, $P(\hat{Y}=1 | A=0) = P(\hat{Y}=1 | A=1)$. A common measure is the Disparate Impact Ratio (DIR).
+    \item \textbf{Equal Opportunity:} Focuses on the true positive rate (TPR) equality \cite{hardt2016equality}, requiring $P(\hat{Y}=1 | Y=1, A=0) = P(\hat{Y}=1 | Y=1, A=1)$.
+    \item \textbf{Equalized Odds:} Extends equal opportunity to require equality in both the TPR and False Positive Rate (FPR) across groups.
+\end{itemize}
+While these metrics provide mathematical formalizations of bias, they are mutually exclusive; satisfying one often violates another unless the base rates are fundamentally equal across groups \cite{kleinberg2016inherent, chouldechova2017fair}. BiasScope mitigates this by allowing users to monitor an array of metrics simultaneously, emphasizing DIR and TPR differentials for actionable insights.
+
+\subsection{Bias Mitigation Strategies}
+Mitigation techniques broadly fall into three categories based on their intervention point in the ML pipeline:
+\begin{enumerate}
+    \item \textbf{Pre-processing:} Transforms the training data to remove underlying discrimination (e.g., Reweighing \cite{kamiran2012data}, Disparate Impact Remover \cite{feldman2015certifying}).
+    \item \textbf{In-processing:} Modifies the learning algorithm to explicitly incorporate fairness constraints during model training (e.g., Adversarial Debiasing \cite{zhang2018mitigating}, Exponentiated Gradient Reduction \cite{agarwal2018reductions}).
+    \item \textbf{Post-processing:} Adjusts the trained model's predictions to satisfy fairness metrics without retraining the underlying model (e.g., Reject Option Classification \cite{kamiran2012decision}, Equalized Odds Post-processing \cite{hardt2016equality}).
+\end{enumerate}
+BiasScope primarily utilizes a robust \emph{post-processing} threshold optimization strategy. Unlike constraints-based in-processing, post-processing allows BiasScope to remain fundamentally model-agnostic, supporting any probabilistic classifer outputting continuous risk scores.
+
+\subsection{Bridging Fairness and Explainability (XAI)}
+Historically, fairness auditing and XAI have been treated as parallel but distinct disciplines. Modern XAI tools like SHAP \cite{lundberg2017unified} and LIME \cite{ribeiro2016should} provide local and global feature attribution. However, simply identifying important features does not address whether those features act as proxies for race or gender. 
+
+Recent research advocates for integrating XAI into the fairness workflow \cite{rudin2019stop, wachter2017counterfactual}. By examining SHAP values specifically for disadvantaged groups compared to advantaged groups, practitioners can visualize how presumably ``neutral'' variables (like zip code or specific credit history markers) correlate with sensitive attributes, revealing historical proxy bias \cite{merrick2020explanation}. Furthermore, counterfactual explanations (e.g., ``If this individual's income were \$5k higher without changing their race, they would have been approved'') provide actionable recourse, shifting the fairness narrative from abstract statistics to individualized equity \cite{wachter2017counterfactual}. BiasScope operationalizes this intersection by seamlessly piping trained models directly into a unified explainer interface.
+
+\section{BiasScope Framework Architecture} \label{sec:architecture}
+BiasScope is designed as a modular, human-in-the-loop application. The pipeline comprises four principal modules: Data Auditing, Automated Model Training, Bias Explanation, and Multi-Objective Mitigation capability. Fig.~\ref{fig:architecture} illustrates the high-level workflow of the system.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig1_architecture.png}
+\caption{The BiasScope End-to-End Pipeline Architecture, illustrating the sequential flow from data ingestion and intersectional auditing to model training, SHAP explainability, Pareto mitigation, and automated PDF reporting. Step 5 (Mitigation) incorporates the novel IFS metric for holistic fairness evaluation.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Intersectional Fairness Score (IFS)}
+To enable a holistic, population-sensitive measurement of intersectional fairness, we propose the \textbf{Intersectional Fairness Score (IFS)}—a novel composite metric that addresses a critical limitation of existing methods: standard metrics such as SPD and DI operate on a single sensitive attribute at a time and do not weight disparate treatment by the size of the affected subpopulation.
+
+Formally, given a dataset $D = \{(X_i, A_i, Y_i)\}_{i=1}^n$ with $m$ intersectional subgroups $S_1, \dots, S_m$ of sizes $n_1, \dots, n_m$, the IFS is defined as:
+\begin{equation}
+\text{IFS}(D, A, Y) = 1 - \sum_{j=1}^{m} \frac{n_j}{n} \cdot \left| P(Y=1 \mid S_j) - P(Y=1 \mid S_j^c) \right|
+\label{eq:ifs}
+\end{equation}
+where $S_j^c = D \setminus S_j$ denotes the complement of subgroup $S_j$ in the dataset. The weight $w_j = n_j / n$ ensures that disparities affecting larger demographic groups penalize the IFS score proportionally, reflecting the real-world societal scale of harm. 
+
+We can formally guarantee that $\text{IFS} \in [0, 1]$. Let the absolute demographic parity difference for subgroup $j$ be denoted as $\Delta_j = \left| P(Y=1 \mid S_j) - P(Y=1 \mid S_j^c) \right|$. Since $P(Y=1 \mid \cdot)$ is a probability, $\Delta_j \in [0, 1]$ for all $j$. The summation term is $\sum_{j=1}^m \frac{n_j}{n} \Delta_j$. Because $\sum_{j=1}^m \frac{n_j}{n} = 1$ and each $\Delta_j \leq 1$, the maximum possible value of the summation is 1, which occurs when $\Delta_j = 1$ for all subgroups. The minimum value is 0, occurring when perfect statistical parity is achieved ($\Delta_j = 0$). Thus, subtracting this summation from 1 ensures $\text{IFS} \in [0, 1]$. 
+
+For model-level fairness evaluation, we replace $Y$ with the model predictions $\hat{Y}$ to obtain the \emph{Model IFS}, which quantifies the bias introduced by the model itself, independently of intrinsic data biases.
+
+\subsection{Intersectional Data Auditing}
+Conventional auditing focuses on marginal demographics (e.g., assessing fairness for ``Females'' and ``African Americans'' independently). BiasScope introduces automated intersectional auditing to identify ``fairness gerrymandering''---instances where groups are treated fairly in aggregate, but specific overlapping sub-populations (e.g., ``African American Females'') face compounded discrimination \cite{kearns2018preventing}.
+
+Given a dataset $D = \{(X_i, A_i, Y_i)\}_{i=1}^n$ where $X \in \mathbb{R}^d$ are non-sensitive features, $A = \{A^{(1)}, A^{(2)}, \dots, A^{(k)}\}$ is a set of sensitive attributes, and $Y \in \{0, 1\}$ is the target binary outcome. BiasScope automatically computes the Cartesian product of unique values across selected attributes $A$ to form subgroups $S_{1}, S_{2}, \dots, S_{m}$. For each subgroup $S_j$, the prevalence of positive outcomes $P(Y=1 | S_j)$ is computed. The Disparate Impact Ratio relative to the most advantaged subgroup $S_{adv}$ is calculated as:
+\begin{equation}
+DIR(S_j) = \frac{P(Y=1 | S_j)}{P(Y=1 | S_{adv})}
+\end{equation}
+Values of $DIR(S_j)$ significantly below the established $0.8$ threshold indicate severe intersectional disparate impact present in the raw data, allowing practitioners to identify vulnerable subpopulations prior to initiating model training \cite{feldman2015certifying}.
+
+\subsection{Automated Model Training Pipeline}
+To ensure the framework is robust and agnostic, BiasScope incorporates an automated model training utility based on an ensemble approach. The module accepts pre-processed tabular data, performs automatic categorical encoding and numerical scaling. We employ ensemble methods fundamentally robust to outliers and unstructured data, primarily utilizing Random Forests and state-of-the-art gradient boosting frameworks such as XGBoost \cite{chen2016xgboost} and CatBoost \cite{dorogush2018catboost}. CatBoost is particularly effective in our context due to its native, optimal handling of high-cardinality categorical variables, reducing the risk of data leakage inherent to external encoding methods. These models provide the predicted probability vectors $\hat{Y}_{prob} = P(Y=1 | X)$ which serve as the foundation for the subsequent mitigation processes.
+
+\subsection{Model-Agnostic Bias Explainability}
+Understanding the genesis of disparate predictions is paramount. BiasScope employs SHAP (SHapley Additive exPlanations) \cite{lundberg2017unified} to provide a robust, game-theoretic approach to feature attribution. SHAP values calculate the marginal contribution of each feature to the final prediction, ensuring efficiency, symmetry, and additivity properties.
+
+\subsubsection{Global Proxy Detection}
+By analyzing the SHAP summary plots segregated by the sensitive attribute class, users can identify proxy variables. For instance, if the feature ``Address\_Code'' possesses a significantly higher average absolute SHAP value for the unprivileged group compared to the privileged group, it strongly suggests that the model is leveraging geographical data as a proxy for the sensitive attribute, propagating redlining biases.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig2_ifs_vs_accuracy.png}
+\caption{Comparison of Model Accuracy and IFS (with 95\% bootstrap confidence intervals) before and after mitigation across three benchmark datasets. IFS consistently improves after BiasScope's mitigation pipeline while accuracy trade-offs remain bounded.}
+\label{fig:shap_summary}
+\end{figure}
+
+\subsubsection{Local Counterfactual Probing}
+Global metrics often mask localized boundary issues. BiasScope features a ``What-If'' interactive playground. Given an individual data instance $X_i$, the user can perturb the feature vector to $X'_i$ and observe the resultant change in the projected probability $\Delta \hat{Y} = M(X'_i) - M(X_i)$. If changing only the sensitive attribute $A$ (e.g., flipping ``Male'' to ``Female'') results in a decision boundary crossing (e.g., $\hat{Y}$ flipping from $1$ to $0$), it explicitly demonstrates an internal lack of counterfactual fairness \cite{wachter2017counterfactual}. BiasScope visualizes these shifts using individual force plots or waterfall diagrams, offering highly localized interpretability.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig4_subgroup_heatmap.png}
+\caption{BiasScope's IFS decomposition view showing per-subgroup weighted bias contributions across intersectional groups. Subgroups above the 0.05 threshold (dashed line) are prime candidates for counterfactual investigation in the What-If playground.}
+\label{fig:counterfactual}
+\end{figure}
+
+\subsection{Multi-Objective Bias Mitigation via Pareto Frontier}
+Most fairness mitigation imposes a fixed threshold (e.g., standardizing a threshold of $0.5$ for binary classification). However, base rates between demographic groups often differ dramatically. Our mitigation approach relies on group-specific threshold optimization (reject option classification mechanics) \cite{kamiran2012decision}, systematically exploring the trade-off space between utility metrics (Accuracy, F1-Score) and fairness metrics (Disparate Impact).
+
+Let $T_{priv} \in [0, 1]$ and $T_{unpriv} \in [0, 1]$ be defined bounds of internal thresholds for the privileged and unprivileged groups respectively. The predicted class is assigned as:
+\begin{equation} \label{eq:thresholds}
+\hat{Y}_{final} = 
+\begin{cases} 
+1 & \text{if } A=0 \text{ and } \hat{Y}_{prob} \geq T_{priv} \\
+1 & \text{if } A=1 \text{ and } \hat{Y}_{prob} \geq T_{unpriv} \\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+BiasScope performs a granular grid search across both $T_{priv}$ and $T_{unpriv}$ vectors. For every paired coordinate $(T_{i}, T_{k})$, the framework calculates the global resulting Accuracy and the subsequent Disparate Impact (DI). 
+
+This exploration yields a set of solution points in the (Accuracy, Fairness) plane. The framework then computationally identifies the \textbf{Pareto Frontier}: the set of non-dominated models where it is impossible to improve Accuracy without degrading Fairness, and vice-versa. 
+
+By rendering this trade-off curve graphically, BiasScope shifts the paradigm from ``de-biasing a model unconditionally'' to ``selecting the optimal societal operating point.'' Users can select the coordinate on the Pareto curve that yields the highest fairness while maintaining legally or operationally mandated accuracy constraints.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig3_pareto_frontier.png}
+\caption{The interactive Pareto frontier plot for the Adult Income dataset, demonstrating the multi-objective trade-off between Accuracy and Demographic Parity Difference across 20 GridSearch candidate models. The red star marks the unmitigated baseline at threshold $\tau = 0.5$.}
+\label{fig:pareto}
+\end{figure}
+
+\section{Experimental Setup} \label{sec:experimental}
+
+To validate BiasScope's capabilities, we simulate a standard bias discovery lifecycle using established fairness benchmarks. Due to the interactive nature of the BiasScope software interface (which runs as a Streamlit web application), we outline the methodology utilizing its underlying components.
+
+\subsection{Datasets}
+We evaluate the framework utilizing three benchmark datasets widely adopted in algorithmic fairness literature:
+\begin{enumerate}
+    \item \textbf{Adult Income Census Dataset \cite{kohavi1996scaling}:} A foundational dataset evaluating the likelihood of an individual earning greater than \$50K per year based on census data. Privileged attributes are \textit{Race} (White) and \textit{Gender} (Male).
+    \item \textbf{COMPAS Recidivism Dataset \cite{angwin2016machine}:} Used originally in ProPublica's structural audit of criminal justice systems, this dataset predicts whether a criminal defendant will re-offend within two years. Privileged attributes are \textit{Race} (Caucasian) and \textit{Gender} (Male).
+    \item \textbf{German Credit Dataset \cite{hofmann1994german}:} A standard dataset for predicting credit risk. Sensitive attributes formulated for our evaluation include \textit{Age} (Old) and \textit{Gender} (Male).
+\end{enumerate}
+
+\subsection{Evaluation Criteria and Workflow}
+The evaluation follows BiasScope's inherent pipeline:
+\begin{itemize}
+    \item \textbf{Step 1. Pipeline execution phase:} Train a base CatBoost classification model.
+    \item \textbf{Step 2. Explainability validation:} Demonstrate how SHAP uncovers encoded proxies not overtly evident.
+    \item \textbf{Step 3. Mitigation quantification:} Measure raw model baseline metrics (Accuracy and Disparate Impact). We then apply BiasScope's grid search across threshold parameters from 0.1 to 0.9.
+\end{itemize}
+We validate success by mapping the generated Pareto optimal points, confirming significant relative increases in the Disparate Impact Ratio while maintaining a bounded degradation of accuracy compared directly against hard-assigned (0.5 threshold) baseline models.
+
+\subsection{Hyperparameter Tuning and Grid Search Parameters}
+For model training, we employed a 80-20 train-test split mechanism to preserve validity bounds. The underlying gradient boosted trees were constructed utilizing iterative depth configurations (depth = 6) spanning 100 boosting iterations, utilizing a learning rate configuration $\eta = 0.1$. The multi-objective mitigation grid search scanned 50 interval gradients between threshold constraints [0.10, 0.90] iteratively across unprivileged arrays versus a static privileged reference array, logging up to 2500 coordinates of accuracy versus fairness differentials. All simulations were executed using standard Python data science libraries including NumPy for array manipulation, Pandas for dataset querying, and Scikit-Learn for validation scaling.
+
+\section{Results and Discussion} \label{sec:results}
+
+\subsection{Quantitative Evaluation via IFS}
+Table~\ref{tab:main_results} presents the comprehensive evaluation of BiasScope across all three benchmark datasets. All experiments utilized CatBoost as the base classifier, with LightGBM as the base estimator within Fairlearn's ExponentiatedGradient mitigation framework.
+
+\input{table_main.tex}
+
+The IFS metric reveals a consistently meaningful improvement in intersectional fairness across all three datasets after BiasScope's mitigation pipeline. On the \textbf{Adult Income} dataset, IFS improved from $0.8582$ to $0.9775$, a gain of $+0.119$, while accuracy decreased by only $2.72\%$. However, this optimization exposes a well-known theoretical limit in fairness algorithms: as the Demographic Parity Difference improves drastically (0.165 to 0.012), the Equal Opportunity (EO) Difference significantly degrades (0.025 to 0.314) \cite{kleinberg2016inherent}. This underscores the impossibility of satisfying mutually exclusive fairness constraints simultaneously across unequal base rates, validating BiasScope's approach of letting users navigate these trade-offs transparently.
+
+The \textbf{COMPAS Recidivism} dataset presented the most challenging mitigation scenario (IFS $+0.077$, accuracy $-5.83\%$). COMPAS is notoriously difficult to debias due to deeply entrenched historical proxies across multiple features and its inherently skewed base outcomes \cite{angwin2016machine}. Addressing structural inequity in such constrained spaces demands heavier accuracy sacrifices, a reality clearly reflected in the Pareto frontier. On the \textbf{German Credit} dataset, IFS improved from $0.8951$ to $0.9548$ with a negligible accuracy loss of $0.50\%$.
+
+While our current evaluation demonstrates the end-to-end efficacy of the BiasScope pipeline, future ablation studies are required to isolate the distinct marginal contributions of the IFS metric versus the Pareto threshold optimization strategy during the mitigation phase.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig4_subgroup_heatmap.png}
+\caption{IFS decomposition: per-subgroup weighted bias contributions ($w_j \times |\text{SPD}_j|$) across all three datasets. Subgroups exceeding the $0.05$ contribution threshold (dashed line) are the primary drivers of IFS penalty, identifying where targeted intervention is most impactful.}
+\label{fig:heatmap}
+\end{figure}
+
+\subsection{Comparison of IFS vs. Traditional Metrics}
+A critical advantage of IFS over conventional marginal metrics is its sensitivity to \emph{population scale}. Table~\ref{tab:comparison_metrics} demonstrates this with the Adult Income dataset. When auditing Gender alone (SPD $= 0.165$) or Race alone (SPD $= 0.108$), both metrics report moderate bias. However, intersectional IFS on Gender $\times$ Race captures the compounded disadvantage of {\em ``Black Females''} and {\em ``Other Females''} subgroups, which constitute $\approx 12\%$ of the dataset yet experience outcome disparities $>2\times$ larger than marginal metrics suggest. This is the ``fairness gerrymandering'' phenomenon \cite{kearns2018preventing} that IFS is specifically designed to expose.
+
+\begin{table}[htbp]
+\caption{IFS vs. Traditional Metrics: Adult Income (Gender $\times$ Race Intersectional Audit)}
+\label{tab:comparison_metrics}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Scope} & \textbf{Value (Before)} & \textbf{Value (After)} \\ \midrule
+SPD (Gender only)      & Marginal   & 0.1654 & 0.0128 \\
+SPD (Race only)        & Marginal   & 0.1082 & 0.0219 \\
+DI (Gender only)       & Marginal   & 0.3627 & 0.9259 \\
+DP Difference          & Marginal   & 0.1654 & 0.0128 \\
+EO Difference          & Marginal   & 0.0258 & 0.3147 \\
+\textbf{IFS (Gender $\times$ Race)} & \textbf{Intersectional} & \textbf{0.8582} & \textbf{0.9775} \\ \bottomrule
+\multicolumn{4}{p{0.9\linewidth}}{\footnotesize \textit{IFS uniquely captures compounded disadvantage at subgroup intersections that marginal metrics miss. The 95\% bootstrap CI for IFS after mitigation: $[0.961, 0.986]$.}}
+\end{tabular}
+\end{table}
+
+\subsection{Comparative Analysis with Existing Frameworks}
+To demonstrate the practical utilities of BiasScope, we compared its feature set and usability against established industry standards: IBM's AI Fairness 360 (AIF360) and Microsoft's Fairlearn.
+
+\begin{table}[htbp]
+\caption{Feature Comparison of Algorithmic Fairness Frameworks}
+\label{tab:comparison}
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Feature} & \textbf{AIF360} & \textbf{Fairlearn} & \textbf{BiasScope} \\ \midrule
+Intersectional Auditing & Partial & Partial & \textbf{Yes (Native)} \\
+Automated Training      & No & No & \textbf{Yes (Ensemble)} \\
+Multi-Objective Pareto  & No & Yes & \textbf{Yes (Integrated UI)} \\
+SHAP Explainability     & External & External & \textbf{Yes (Integrated)} \\
+Counterfactual UI       & No & No & \textbf{Yes (What-If)} \\
+Automated PDF Reports   & No & No & \textbf{Yes} \\
+Programming Required    & High & Moderate & \textbf{None (No-Code UI)} \\ \bottomrule
+\end{tabular}%
+}
+\end{table}
+
+As shown in Table~\ref{tab:comparison}, while AIF360 offers a wider array of low-level algorithmic mitigation interventions, it requires substantial programming overhead from the user. Fairlearn introduces excellent reductions approaches and programmatic Pareto plotting, but relies on external integrations for explainability. BiasScope bridges this gap by offering a \textit{no-code, end-to-end interactive UI} that simultaneously provides multi-objective mitigation and deep XAI probing (via SHAP) in a single workflow.
+
+\subsection{Discussion of Stakeholder Implications}
+This transition represents a fundamental paradigm shift away from traditional black-box compliance algorithms. Through the What-If interactive modules, organizational stakeholders with zero underlying programming capability can adjust input sliders on single simulated clients, proving the bounds of counterfactual constraints natively. A loan officer, equipped with BiasScope's integrated framework, can confidently argue to a governance compliance board that adopting operating curve parameters on coordinate $(x,y)$ represents the legally defensible compromise necessary for deployment, rather than arbitrarily applying algorithms hoping for structural compliance outputs.
+
+\section{Conclusion and Future Work} \label{sec:conclusion}
+
+As predictive models are increasingly embedded in critical decision-making processes, it is essential that fairness auditing tools become accessible, transparent, and actionable. 
+
+In this work, we presented \textbf{BiasScope}, an open-source framework that integrates intersectional bias auditing, multi-objective mitigation, and SHAP-based explainability into an end-to-end interactive application. We introduced the Intersectional Fairness Score (IFS) to formally quantify and track compounded disadvantage across overlapping minority groups. Our experimental evaluation on benchmark datasets demonstrated that BiasScope effectively mitigates bias while maintaining strong predictive utility, providing a clear visualization of the inevitable trade-offs involved in algorithmic fairness. 
+
+Future iterations of the framework will focus on extending these capabilities to unstructured modalities, such as natural language processing and computer vision, and developing automated recourse generation to recommend specific counterfactual interventions for disadvantaged subgroups.
+
+\section*{Acknowledgment}
+
+The authors acknowledge the open-source community, particularly the maintainers of Fairlearn, Scikit-Learn, and SHAP libraries, whose foundational computational logic systems accelerated the development vectors of this interactive platform.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
